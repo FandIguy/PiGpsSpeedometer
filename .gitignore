@@ -1,0 +1,18 @@
+__pycache__/
+*.pyc
+*.pyo
+
+# Leaderboard is personal runtime data
+zero_to_sixty_times.json
+
+# OSM data files are large (150MB+) — build them locally
+osm/
+
+# Minetest user data
+.minetest/
+
+# Logs
+*.log
+
+# Temp files from atomic writes
+.lb_*.tmp

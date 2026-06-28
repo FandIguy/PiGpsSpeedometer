@@ -1,0 +1,18 @@
+# /etc/default/gpsd
+# Config for GlobalSat BU-353N5 on Raspberry Pi 5
+# Copy to: /etc/default/gpsd
+
+# The BU-353N5 enumerates as a Prolific PL2303 serial device.
+# It almost always appears as /dev/ttyUSB0. Confirm with: ls -l /dev/ttyUSB*
+DEVICES="/dev/ttyUSB0"
+
+# -n  = don't wait for a client to connect before polling the GPS
+#       (so we have a fix ready as soon as the speedometer starts)
+# -b  = read-only mode (don't send commands to the GPS)
+GPSD_OPTIONS="-n -b"
+
+# Start gpsd automatically on boot
+START_DAEMON="true"
+
+# Allow gpsd to be controlled via its socket
+USBAUTO="true"

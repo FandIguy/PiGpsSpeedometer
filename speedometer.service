@@ -1,0 +1,41 @@
+[Unit]
+Description=Stealth R/T GPS Cluster
+# Wait for gpsd AND for logind to be fully up. The logind dependency is
+# critical: without it, on a cold boot the service can start before
+# systemd-logind has created the seat session, so PAMName=login can't get a
+# session and kmsdrm fails to become DRM master (silent black screen).
+After=gpsd.service multi-user.target systemd-user-sessions.service systemd-logind.service
+Wants=gpsd.service
+
+[Service]
+Type=simple
+User=stealth
+WorkingDirectory=/home/stealth
+# PAMName=login + TTYPath gives the service a real login session on tty1 so it
+# can own the display (become DRM master) via kmsdrm.
+PAMName=login
+TTYPath=/dev/tty1
+ExecStart=/usr/bin/python3 /home/stealth/speedometer.py
+# Render straight to the KMS/DRM framebuffer (no desktop needed)
+Environment=SDL_VIDEODRIVER=kmsdrm
+# Pi 5: card0 is the V3D GPU (render-only, no display connectors); card1 is
+# the RP1 display controller (HDMI-A-1, HDMI-A-2).  SDL kmsdrm defaults to
+# device index 0, opens card0, finds no displays, and silently falls back to
+# the dummy driver.  Force index 1 so SDL targets the correct display card.
+# REMOVE THIS LINE on Raspberry Pi 4.
+Environment=SDL_KMSDRM_DEVICE_INDEX=1
+Environment=XDG_RUNTIME_DIR=/run/user/1000
+Environment=SDL_FBDEV=/dev/fb0
+Environment=SDL_NOMOUSE=1
+# Python output appears immediately in journalctl (no buffering)
+Environment=PYTHONUNBUFFERED=1
+# Wait for the DRM display device to actually exist instead of a fixed sleep
+ExecStartPre=/bin/bash -c 'until [ -e /dev/dri/card1 ]; do sleep 0.2; done'
+# Request 4Hz GPS updates after gpsd is ready; || true ensures failure is non-fatal
+ExecStartPost=/bin/sh -c 'sleep 3 && gpsctl -c 0.25 2>/dev/null || true'
+# Restart if it ever crashes (also triggers after Ctrl+M / Ctrl+T return)
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target
