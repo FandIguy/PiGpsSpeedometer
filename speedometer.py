@@ -818,16 +818,18 @@ def main():
                 elif e.key == pygame.K_m and (e.mod & pygame.KMOD_CTRL):
                     pygame.quit()
                     try:
-                        os.execvp('/home/stealth/launch_minetest.sh',
-                                  ['/home/stealth/launch_minetest.sh'])
+                        _here = os.path.dirname(os.path.abspath(__file__))
+                        _script = os.path.join(_here, 'launch_minetest.sh')
+                        os.execvp(_script, [_script])
                     except Exception:
                         pass
                     sys.exit(0)
                 elif e.key == pygame.K_t and (e.mod & pygame.KMOD_CTRL):
                     pygame.quit()
                     try:
-                        os.execvp('/home/stealth/launch_terminal.sh',
-                                  ['/home/stealth/launch_terminal.sh'])
+                        _here = os.path.dirname(os.path.abspath(__file__))
+                        _script = os.path.join(_here, 'launch_terminal.sh')
+                        os.execvp(_script, [_script])
                     except Exception:
                         pass
                     sys.exit(0)

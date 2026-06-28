@@ -15,7 +15,7 @@ sleep 1
 # Launch X on tty2 with Minetest.
 # minetest_x.sh runs setxkbmap first so keyboard works in-game.
 # Screen size and fullscreen come from ~/.minetest/minetest.conf.
-xinit /home/stealth/minetest_x.sh -- :0 vt2 2>/dev/null
+xinit /home/USERNAME/minetest_x.sh -- :0 vt2 2>/dev/null
 
 # Minetest exited -- clean up any lingering X process
 pkill -f "X :0" 2>/dev/null

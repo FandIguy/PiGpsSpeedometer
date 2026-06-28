@@ -9,13 +9,13 @@ Wants=gpsd.service
 
 [Service]
 Type=simple
-User=stealth
-WorkingDirectory=/home/stealth
+User=USERNAME
+WorkingDirectory=/home/USERNAME
 # PAMName=login + TTYPath gives the service a real login session on tty1 so it
 # can own the display (become DRM master) via kmsdrm.
 PAMName=login
 TTYPath=/dev/tty1
-ExecStart=/usr/bin/python3 /home/stealth/speedometer.py
+ExecStart=/usr/bin/python3 /home/USERNAME/speedometer.py
 # Render straight to the KMS/DRM framebuffer (no desktop needed)
 Environment=SDL_VIDEODRIVER=kmsdrm
 # Pi 5: card0 is the V3D GPU (render-only, no display connectors); card1 is

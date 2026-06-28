@@ -7,7 +7,7 @@
 # without a password prompt — required by the Minetest and terminal
 # launch scripts, which run as the service user with no TTY.
 
-stealth ALL=(ALL) NOPASSWD: /usr/bin/systemctl stop speedometer
-stealth ALL=(ALL) NOPASSWD: /usr/bin/systemctl start speedometer
-stealth ALL=(ALL) NOPASSWD: /usr/bin/chvt
-stealth ALL=(ALL) NOPASSWD: /usr/bin/openvt
+USERNAME ALL=(ALL) NOPASSWD: /usr/bin/systemctl stop speedometer
+USERNAME ALL=(ALL) NOPASSWD: /usr/bin/systemctl start speedometer
+USERNAME ALL=(ALL) NOPASSWD: /usr/bin/chvt
+USERNAME ALL=(ALL) NOPASSWD: /usr/bin/openvt

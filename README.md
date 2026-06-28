@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 # Stealth R/T GPS Cluster
 
 A fullscreen amber VFD-style GPS speedometer kiosk built for a **1991 Dodge Stealth R/T**, running on a Raspberry Pi 5. Renders directly to the framebuffer via SDL2 kmsdrm — no desktop environment, no compositor, boots straight into the cluster display.
@@ -82,12 +81,12 @@ Without this, the clock falls back to UTC display.
 
 Use **Raspberry Pi Imager** to flash **Raspberry Pi OS Lite (64-bit)** to your SD card. In the imager's settings:
 
-- Set hostname: `stealth` (or whatever you prefer)
+- Set hostname: anything you like
 - Enable SSH
-- Set username: `stealth` (see note below)
+- Set username: `USERNAME` (used throughout — replace with whatever you choose)
 - Set your WiFi credentials if needed
 
-> **Username note:** The service and launch scripts use `/home/stealth/` paths. If you choose a different username, edit lines 821 and 829 of `speedometer.py` to match, or use the portable version that auto-detects its own path (recommended — see Customization).
+> **Username note:** Replace `USERNAME` everywhere in the config files and service file with your actual username. `speedometer.py` uses a portable path (`__file__`-relative) so it works regardless of where the script lives.
 
 ### Step 2 — Initial system setup
 
@@ -103,7 +102,7 @@ sudo apt install -y gpsd gpsd-clients python3-pygame xinit \
 Add your user to the required groups:
 
 ```bash
-sudo usermod -aG video,render,input stealth
+sudo usermod -aG video,render,input USERNAME
 ```
 
 Log out and back in (or reboot) for group changes to take effect.
@@ -111,7 +110,7 @@ Log out and back in (or reboot) for group changes to take effect.
 ### Step 3 — Clone the repo
 
 ```bash
-cd /home/stealth
+cd /home/USERNAME
 git clone https://github.com/YOUR_USERNAME/stealth-rt-gps-cluster.git temp-cluster
 cp temp-cluster/speedometer.py .
 cp temp-cluster/speedometer.service .
@@ -189,7 +188,7 @@ Paste (or copy from `config/autologin.conf`):
 ```ini
 [Service]
 ExecStart=
-ExecStart=-/sbin/agetty --autologin stealth --noclear %I $TERM
+ExecStart=-/sbin/agetty --autologin USERNAME --noclear %I $TERM
 ```
 
 ### Step 7 — Pi 5 display configuration (skip for Pi 4)
@@ -371,7 +370,7 @@ This was the trickiest part of the build. Three things must all be in place:
 This is expected when running `python3 speedometer.py` directly over a plain SSH session. SSH has no logind seat and can't acquire DRM master. Test via the service or with:
 
 ```bash
-sudo openvt -c 1 -s -- sudo -u stealth env SDL_VIDEODRIVER=kmsdrm SDL_KMSDRM_DEVICE_INDEX=1 python3 /home/stealth/speedometer.py
+sudo openvt -c 1 -s -- sudo -u USERNAME env SDL_VIDEODRIVER=kmsdrm SDL_KMSDRM_DEVICE_INDEX=1 python3 /home/USERNAME/speedometer.py
 ```
 
 ---
@@ -404,13 +403,7 @@ AMBER_HI  = (255, 178, 50)   # highlights
 RED       = (255, 70, 25)    # alerts and overspeed
 ```
 
-**Portable launch script paths:** If you change the username from `stealth`, update the `os.execvp` calls in `main()` around lines 821 and 829, or replace the hardcoded paths with:
-
-```python
-_SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-os.execvp(os.path.join(_SCRIPT_DIR, 'launch_minetest.sh'),
-          [os.path.join(_SCRIPT_DIR, 'launch_minetest.sh')])
-```
+**Launch script paths:** `speedometer.py` resolves `launch_minetest.sh` and `launch_terminal.sh` relative to its own location using `os.path.abspath(__file__)`, so they work regardless of username or install path.
 
 ---
 
@@ -435,7 +428,3 @@ python3 -m py_compile speedometer.py
 ## License
 
 MIT License — do whatever you want with it. If you build one for your car, post a photo.
-=======
-# PiGpsSpeedometer
-Raspberry Pi GPS Speedometer/Carputer. Use a Raspberry Pi as a speedometer for a classic car or if you are looking for a Cyberdeck type build you can install and run in your own car! 
->>>>>>> da6adb71272172c710c864b5ec8d7d964e45c728
