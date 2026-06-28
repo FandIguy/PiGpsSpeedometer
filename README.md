@@ -21,7 +21,6 @@ Originally built for a 1991 Dodge Stealth R/T.
 - 12-hour clock (US Central, DST-aware via zoneinfo)
 - GPS signal-strength bars
 - Boots directly to the cluster on power-up (systemd)
-- Simulation mode when no GPS is present (no code changes needed)
 - Optional Ctrl+M (Minetest) and Ctrl+T (terminal) launch hotkeys
 
 ---
