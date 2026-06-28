@@ -1,8 +1,7 @@
 # Pi GPS Speedometer
 
 A full-screen GPS digital instrument cluster for the **Raspberry Pi 5**, built to
-run headless in a car — it boots straight to the gauge display with no desktop.
-Originally built for a 1991 Dodge Stealth R/T.
+run headless in a car — it boots straight to the gauge display with no desktop with the option to switch to terminal or play Minetest(Minecraft) when you are parked! 
 
 ![Dashboard](docs/images/dashboard.png)
 
