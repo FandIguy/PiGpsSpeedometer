@@ -1,6 +1,6 @@
-# Stealth R/T GPS Cluster
+# Raspberry Pi GPS Speedometer/Carputer Cluster
 
-A fullscreen amber VFD-style GPS speedometer kiosk built for a **1991 Dodge Stealth R/T**, running on a Raspberry Pi 5. Renders directly to the framebuffer via SDL2 kmsdrm — no desktop environment, no compositor, boots straight into the cluster display.
+A fullscreen amber VFD-style GPS speedometer kiosk built for classic cars, running on a Raspberry Pi 5. Renders directly to the framebuffer via SDL2 kmsdrm — no desktop environment, no compositor, boots straight into the cluster display.
 
 > Bonus: press **Ctrl+M** to launch Minetest, **Ctrl+T** for a terminal. Press Esc in Minetest to return to the cluster automatically.
 
