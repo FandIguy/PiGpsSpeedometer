@@ -111,7 +111,7 @@ Log out and back in (or reboot) for group changes to take effect.
 
 ```bash
 cd /home/USERNAME
-git clone https://github.com/YOUR_USERNAME/stealth-rt-gps-cluster.git temp-cluster
+git clone https://github.com/FandIguy/PiGpsSpeedometer.git temp-cluster
 cp temp-cluster/speedometer.py .
 cp temp-cluster/speedometer.service .
 cp temp-cluster/scripts/launch_minetest.sh .
