@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Stealth R/T GPS Cluster
 
 A fullscreen amber VFD-style GPS speedometer kiosk built for a **1991 Dodge Stealth R/T**, running on a Raspberry Pi 5. Renders directly to the framebuffer via SDL2 kmsdrm — no desktop environment, no compositor, boots straight into the cluster display.
@@ -434,3 +435,7 @@ python3 -m py_compile speedometer.py
 ## License
 
 MIT License — do whatever you want with it. If you build one for your car, post a photo.
+=======
+# PiGpsSpeedometer
+Raspberry Pi GPS Speedometer/Carputer. Use a Raspberry Pi as a speedometer for a classic car or if you are looking for a Cyberdeck type build you can install and run in your own car! 
+>>>>>>> da6adb71272172c710c864b5ec8d7d964e45c728
