@@ -3,7 +3,7 @@
 A full-screen GPS digital instrument cluster for the **Raspberry Pi 5**, built to
 run headless in a car — it boots straight to the gauge display with no desktop with the option to switch to terminal or play Minetest(Minecraft) when you are parked! 
 
-![Dashboard](docs/Dashboard.jpg)
+![Dashboard](docs/Images/Dashboard.jpg)
 
 ![Raspberry Pi 5](https://img.shields.io/badge/Raspberry%20Pi-5-C51A4A)
 ![Python](https://img.shields.io/badge/Python-3.11%2B-blue)
