@@ -1,430 +1,243 @@
-# Raspberry Pi GPS Speedometer/Carputer Cluster
+# Pi GPS Speedometer
 
-A fullscreen amber VFD-style GPS speedometer kiosk built for classic cars, running on a Raspberry Pi 5. Renders directly to the framebuffer via SDL2 kmsdrm — no desktop environment, no compositor, boots straight into the cluster display.
+*A full-screen GPS speedometer and digital instrument cluster for the Raspberry Pi 5.*
 
-> Bonus: press **Ctrl+M** to launch Minetest, **Ctrl+T** for a terminal. Press Esc in Minetest to return to the cluster automatically.
+![Dashboard Screenshot](docs/images/dashboard.png)
+
+![Raspberry Pi 5](https://img.shields.io/badge/Raspberry%20Pi-5-C51A4A)
+![Python](https://img.shields.io/badge/Python-3.11-blue)
+![Bookworm](https://img.shields.io/badge/Tested%20on-Bookworm-success)
+![GPSD](https://img.shields.io/badge/GPSD-Compatible-green)
+![License](https://img.shields.io/badge/License-MIT-lightgrey)
 
 ---
 
 ## Features
 
-- Analog sunrise-arc speedometer with segmented LED bar
-- Speed in MPH with configurable smoothing
-- Compass heading (16-point cardinal with degree readout)
-- Altitude in feet and vertical speed (ft/min)
-- GPS quality indicators: satellite count, HDOP, fix type (2D/3D), signal bars
-- Local clock (US Central, 12-hour, blinking colon) + UTC date
-- Trip odometer and elapsed session timer
-- **0–60 MPH timer** with persistent top-5 leaderboard (power-loss safe atomic writes)
-- Speed limit display + street name from OpenStreetMap data (optional)
-- City name lookup (optional)
-- VFD-style amber color palette with CRT scanline overlay
-- Animated boot splash sequence
-- **Simulation mode** — runs with no GPS connected; arrow keys adjust simulated speed
-- Hotkey launcher: **Ctrl+M** → Minetest, **Ctrl+T** → bash terminal
+* Full-screen digital speedometer
+* Real-time GPS speed and heading
+* Automatic GPS detection
+* Simulation mode when GPS is unavailable
+* Optimized for Raspberry Pi 5
+* SDL2/KMSDRM rendering
+* Automatic startup with systemd
+* Lightweight and responsive
 
 ---
 
-## Hardware
+## Repository Layout
 
-| Component | Detail | Notes |
-|-----------|--------|-------|
-| SBC | Raspberry Pi 5 8GB | Pi 4 also works — see Pi 4 notes |
-| Display | GeeekPi 7" 1024×600 HDMI | Connected to HDMI1 port |
-| GPS | GlobalSat BU-353N5 | USB dongle, Prolific PL2303 chip → `/dev/ttyUSB0` |
-| Input | 2.4GHz wireless USB keyboard | Any standard USB HID keyboard |
-| Power | 12V cigarette → USB-C buck converter | One for Pi, one for screen |
-| Vehicle | 1991 Dodge Stealth R/T | Any car will do |
-
-**Pi 4 users:** Remove the `SDL_KMSDRM_DEVICE_INDEX=1` line from `speedometer.service` and skip the `20-pi5-kms.conf` step — Pi 4 uses a single DRM device index.
+```text
+PiGpsSpeedometer/
+├── speedometer.py
+├── speedometer.service
+├── install.sh
+├── config/
+├── docs/
+│   └── images/
+├── fonts/
+└── README.md
+```
 
 ---
 
-## Software Dependencies
+# Quick Install
 
-### System packages
+Clone the repository.
+
+```bash
+git clone https://github.com/FandIguy/PiGpsSpeedometer.git
+cd PiGpsSpeedometer
+```
+
+Install the required packages.
 
 ```bash
 sudo apt update
-sudo apt install -y \
-    gpsd gpsd-clients \
-    python3-pygame \
-    xinit \
-    xserver-xorg-core \
-    xserver-xorg-input-libinput \
-    matchbox-window-manager \
-    minetest \
-    git
+
+sudo apt install \
+python3-pygame \
+python3-gps \
+gpsd \
+gpsd-clients \
+python3-pip \
+python3-serial \
+fonts-dejavu \
+curl
 ```
 
-### Python packages
-
-`pygame` is the only external Python dependency. If `python3-pygame` from apt is outdated:
+Run the installation script.
 
 ```bash
-pip3 install pygame --break-system-packages
+chmod +x install.sh
+./install.sh
 ```
 
-### Optional: tzdata (for local time zone)
+Reboot.
 
 ```bash
-sudo apt install -y python3-tzdata
+sudo reboot
 ```
 
-Without this, the clock falls back to UTC display.
+That's it.
 
 ---
 
-## Installation Guide
+# Detailed Installation
 
-### Step 1 — Flash Raspberry Pi OS
+This section explains what the installation script configures and why.
 
-Use **Raspberry Pi Imager** to flash **Raspberry Pi OS Lite (64-bit)** to your SD card. In the imager's settings:
+## Display Configuration
 
-- Set hostname: anything you like
-- Enable SSH
-- Set username: `USERNAME` (used throughout — replace with whatever you choose)
-- Set your WiFi credentials if needed
+Explain why SDL uses card1 on the Raspberry Pi 5.
 
-> **Username note:** Replace `USERNAME` everywhere in the config files and service file with your actual username. `speedometer.py` uses a portable path (`__file__`-relative) so it works regardless of where the script lives.
+Explain the DRM/KMS configuration.
 
-### Step 2 — Initial system setup
+Include the environment variables.
 
-SSH into the Pi and run:
+---
 
-```bash
-sudo apt update && sudo apt upgrade -y
-sudo apt install -y gpsd gpsd-clients python3-pygame xinit \
-    xserver-xorg-core xserver-xorg-input-libinput \
-    matchbox-window-manager minetest git
-```
+## GPS Configuration
 
-Add your user to the required groups:
+Enable UART.
 
-```bash
-sudo usermod -aG video,render,input USERNAME
-```
+Disable serial login.
 
-Log out and back in (or reboot) for group changes to take effect.
+Configure gpsd.
 
-### Step 3 — Clone the repo
-
-```bash
-cd /home/USERNAME
-git clone https://github.com/FandIguy/PiGpsSpeedometer.git temp-cluster
-cp temp-cluster/speedometer.py .
-cp temp-cluster/speedometer.service .
-cp temp-cluster/scripts/launch_minetest.sh .
-cp temp-cluster/scripts/launch_terminal.sh .
-cp temp-cluster/scripts/minetest_x.sh .
-chmod +x launch_minetest.sh launch_terminal.sh minetest_x.sh
-rm -rf temp-cluster
-```
-
-### Step 4 — Install the Orbitron font
-
-The cluster uses the Orbitron typeface (free, Google Fonts). Download and install it:
-
-```bash
-mkdir -p ~/.fonts
-cd ~/.fonts
-curl -L "https://github.com/google/fonts/raw/main/ofl/orbitron/Orbitron%5Bwght%5D.ttf" \
-     -o Orbitron.ttf
-fc-cache -fv
-```
-
-If `curl` fails or you'd rather do it manually:
-1. Go to fonts.google.com and search "Orbitron"
-2. Download the font zip, extract `Orbitron[wght].ttf`
-3. Copy it to `~/.fonts/` and run `fc-cache -fv`
-
-The cluster falls back to DejaVu Sans Mono → Liberation Mono → system monospace if Orbitron isn't found.
-
-### Step 5 — Configure GPS
-
-Edit `/etc/default/gpsd`:
-
-```bash
-sudo nano /etc/default/gpsd
-```
-
-Replace the contents with (or copy from `config/gpsd`):
-
-```ini
-DEVICES="/dev/ttyUSB0"
-GPSD_OPTIONS="-n -b"
-START_DAEMON="true"
-USBAUTO="true"
-```
-
-Enable and start gpsd:
-
-```bash
-sudo systemctl enable gpsd
-sudo systemctl start gpsd
-```
-
-Confirm the GPS is talking:
+After reboot, verify GPS is working.
 
 ```bash
 cgps -s
-# or
-gpsmon
 ```
 
-You should see satellite data within about 60 seconds outdoors (cold start). The `-n` flag makes gpsd poll before any client connects, so a fix is ready the moment the cluster starts.
+A successful fix will look similar to:
 
-### Step 6 — Configure tty1 autologin (required for kmsdrm)
+```text
+Latitude: 44.xxxxxx
+Longitude: -93.xxxxxx
+Fix: 3D
+Satellites: 10
+Speed: 32 mph
+```
 
-The cluster needs a real login session on tty1 to acquire DRM master. Without this you get a silent black screen.
+**Note:** The first cold start may take several minutes while the receiver downloads satellite data. Future fixes are typically much faster.
+
+---
+
+## Service
+
+Enable the application.
 
 ```bash
-sudo mkdir -p /etc/systemd/system/getty@tty1.service.d
-sudo nano /etc/systemd/system/getty@tty1.service.d/autologin.conf
-```
-
-Paste (or copy from `config/autologin.conf`):
-
-```ini
-[Service]
-ExecStart=
-ExecStart=-/sbin/agetty --autologin USERNAME --noclear %I $TERM
-```
-
-### Step 7 — Pi 5 display configuration (skip for Pi 4)
-
-The Pi 5 splits DRM across two devices: `card0` is the V3D GPU (no displays), `card1` is the RP1 display controller (HDMI). SDL defaults to index 0 and finds no displays, silently falling back to the `dummy` driver — you'd get a running process with a black screen.
-
-Fix 1: force SDL to card1 (done in the service file already).
-
-Fix 2: force X to card1 for Minetest:
-
-```bash
-sudo mkdir -p /etc/X11/xorg.conf.d
-sudo cp config/20-pi5-kms.conf /etc/X11/xorg.conf.d/
-```
-
-Contents of `config/20-pi5-kms.conf`:
-
-```
-Section "Device"
-    Identifier "Pi5 RP1 Display"
-    Driver     "modesetting"
-    Option     "kmsdev" "/dev/dri/card1"
-EndSection
-```
-
-### Step 8 — X server permissions (required for Minetest hotkey)
-
-The speedometer service has no console stdin (`StandardInput=` is not set, defaulting to `/dev/null`). Xorg's default `allowed_users=console` check fails for this process. Fix:
-
-```bash
-sudo cp config/Xwrapper.config /etc/X11/Xwrapper.config
-```
-
-Or manually set `/etc/X11/Xwrapper.config` to:
-
-```
-allowed_users=anybody
-```
-
-### Step 9 — Sudoers entry (for VT switching)
-
-The launch scripts need to switch virtual terminals and open VTs without a password prompt:
-
-```bash
-sudo cp config/speedometer-sudoers /etc/sudoers.d/speedometer
-sudo chmod 440 /etc/sudoers.d/speedometer
-```
-
-Verify it's correct before applying:
-
-```bash
-sudo visudo -c -f config/speedometer-sudoers
-```
-
-### Step 10 — Install the systemd service
-
-```bash
-sudo cp speedometer.service /etc/systemd/system/
-sudo systemctl daemon-reload
 sudo systemctl enable speedometer
 sudo systemctl start speedometer
 ```
 
-Check it's running:
+Verify it is running.
 
 ```bash
-sudo systemctl status speedometer
-sudo journalctl -u speedometer -f
+systemctl status speedometer
 ```
 
-Look for the line:
+Expected output:
 
+```text
+Active: active (running)
 ```
-[display] using SDL video driver: kmsdrm
+
+---
+
+# Raspberry Pi Compatibility
+
+## Raspberry Pi 5
+
+Uses:
+
+* card1
+* KMSDRM
+* SDL device index 1
+
+## Raspberry Pi 4
+
+Only one DRM device is exposed, so SDL automatically selects the correct display. Remove:
+
+```text
+SDL_KMSDRM_DEVICE_INDEX=1
 ```
 
-If you see `dummy` instead, the DRM session setup failed — see Troubleshooting.
+from the service file.
 
-### Step 11 — Minetest configuration (optional)
+---
+
+# Simulation Mode
+
+If no GPS receiver is connected, the application automatically enters simulation mode for testing. No code changes are required.
+
+---
+
+# Troubleshooting
+
+## GPS never locks
+
+* Confirm antenna has a clear view of the sky.
+* Check `cgps -s`.
+* Verify gpsd is running.
+* Remember that the first cold start may take several minutes.
+
+## Permission denied
+
+Ensure the user belongs to the required groups.
 
 ```bash
-mkdir -p ~/.minetest
-nano ~/.minetest/minetest.conf
+sudo usermod -aG video,input,gpio,dialout $USER
 ```
 
-```ini
-screenW = 1024
-screenH = 600
-fullscreen = true
-vsync = true
-fps_max = 30
-viewing_range = 50
-smooth_lighting = false
-```
-
----
-
-## Hotkeys
-
-| Key | Action |
-|-----|--------|
-| `Esc` | Quit the cluster (for testing; service auto-restarts) |
-| `Arrow Up` | Increase simulated speed by 5 mph (sim mode only) |
-| `Arrow Down` | Decrease simulated speed by 5 mph (sim mode only) |
-| `R` | Arm leaderboard reset (LED flashes prompt) |
-| `R` (again within 3s) | Confirm leaderboard clear |
-| `Ctrl+M` | Exit cluster → launch Minetest |
-| `Ctrl+T` | Exit cluster → open bash terminal on tty2 |
-
-**Returning from Minetest:** Press `Esc` inside the game → `Exit to OS`. The cluster restarts automatically within 2 seconds via systemd.
-
-**Returning from terminal:** Type `exit` at the shell prompt. The cluster restarts automatically.
-
----
-
-## Simulation Mode
-
-The cluster enters simulation mode automatically if gpsd is unreachable or not installed. No code changes needed — it just works.
-
-In sim mode:
-- `Arrow Up` / `Arrow Down` adjusts speed in 5 mph increments
-- Heading drifts realistically based on speed
-- Altitude oscillates around a fixed value
-- The display shows `SIM MODE` instead of `3D FIX`
-
-This lets you test the full UI, 0-60 timer, and all features on a laptop or desktop with no GPS hardware.
-
-To run in simulation on a desktop with X:
+Then reboot.
 
 ```bash
-python3 speedometer.py
+sudo reboot
 ```
+
+## DRM pageflip errors
+
+If you encounter:
+
+```
+drmModePageFlip failed (-13)
+```
+
+verify that no desktop environment is running and that SDL has DRM master.
+
+## Keyboard input
+
+If keyboard input does not work:
+
+* Verify SDL has focus.
+* Confirm no other application is capturing input.
+* Ensure the input group permissions are correct.
 
 ---
 
-## Troubleshooting
+# Roadmap
 
-### Black screen / process runs but nothing on display
-
-1. Check what driver SDL used:
-   ```bash
-   journalctl -u speedometer -n 50 | grep "video driver"
-   ```
-   Must show `kmsdrm`. If it shows `dummy`, kmsdrm failed.
-
-2. Verify the logind session exists:
-   ```bash
-   loginctl list-sessions
-   ```
-   Must show `Seat=seat0`, `TTY=tty1`, `Active=yes`.
-
-3. Check the autologin config is in place:
-   ```bash
-   cat /etc/systemd/system/getty@tty1.service.d/autologin.conf
-   ```
-
-4. Pi 5: confirm `SDL_KMSDRM_DEVICE_INDEX=1` is in the service file.
-
-### GPS not connecting
-
-```bash
-systemctl status gpsd
-gpsd -N -D3 /dev/ttyUSB0   # test manually
-ls /dev/ttyUSB*             # confirm device enumerated
-```
-
-The BU-353N5 shows up as `/dev/ttyUSB0` via the Prolific PL2303 driver. If absent, check `dmesg | grep PL2303`.
-
-### Keyboard not working in Minetest
-
-This was the trickiest part of the build. Three things must all be in place:
-
-1. `matchbox-window-manager` installed — without a WM, X uses pointer focus and Minetest's window starts without keyboard focus.
-2. `/etc/X11/Xwrapper.config` contains `allowed_users=anybody` — without this, `xinit` fails entirely when called from the service (no console stdin).
-3. `20-pi5-kms.conf` pointing X at `card1` — without this, X finds no display connectors on `card0`.
-
-### Pageflip error -13 (EACCES)
-
-This is expected when running `python3 speedometer.py` directly over a plain SSH session. SSH has no logind seat and can't acquire DRM master. Test via the service or with:
-
-```bash
-sudo openvt -c 1 -s -- sudo -u USERNAME env SDL_VIDEODRIVER=kmsdrm SDL_KMSDRM_DEVICE_INDEX=1 python3 /home/USERNAME/speedometer.py
-```
+* OBD-II integration
+* RPM gauge
+* Coolant temperature
+* Fuel level
+* Trip computer
+* Custom themes
+* Touchscreen support
+* CAN bus integration
 
 ---
 
-## Optional: Speed Limit + City Name
+# Contributing
 
-The cluster can display the posted speed limit and current city/street name using pre-built OpenStreetMap indexes. These data files are large (~150MB total) and not included in this repo.
-
-If the `osm/` directory is absent, the cluster runs perfectly — speed limit and city panels just show `--`. Everything else works normally.
-
-To build the OSM indexes: [documentation TBD — the build pipeline processes OSM PBF extracts into spatial indexes for fast lat/lon lookups].
+Issues and pull requests are welcome.
 
 ---
 
-## Customization
+# License
 
-All display constants are at the top of `speedometer.py` (~line 44):
-
-```python
-WIDTH, HEIGHT = 1024, 600    # change for your display
-FPS = 30                     # render rate
-MAX_SPEED = 120              # top of the analog gauge (mph)
-FULLSCREEN = True
-
-LEADERBOARD_SIZE = 5         # top-N 0-60 times to keep
-
-# Color palette — all RGB tuples
-AMBER     = (255, 128, 22)   # primary display color
-AMBER_HI  = (255, 178, 50)   # highlights
-RED       = (255, 70, 25)    # alerts and overspeed
-```
-
-**Launch script paths:** `speedometer.py` resolves `launch_minetest.sh` and `launch_terminal.sh` relative to its own location using `os.path.abspath(__file__)`, so they work regardless of username or install path.
-
----
-
-## Service Management
-
-```bash
-# View live logs
-sudo journalctl -u speedometer -f
-
-# Restart after editing speedometer.py
-sudo systemctl restart speedometer
-
-# After editing speedometer.service
-sudo systemctl daemon-reload && sudo systemctl restart speedometer
-
-# Syntax-check before deploying
-python3 -m py_compile speedometer.py
-```
-
----
-
-## License
-
-MIT License — do whatever you want with it. If you build one for your car, post a photo.
+MIT License.
