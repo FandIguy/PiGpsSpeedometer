@@ -36,7 +36,8 @@ run headless in a car — it boots straight to the gauge display with no desktop
 | Raspberry Pi 5 (8 GB) | Pi 4 also works — see compatibility note below |
 | GlobalSat BU-353N5 USB GPS | Enumerates as `/dev/ttyUSB0` (Prolific serial) |
 | 7" 1024×600 HDMI IPS display | Driver-free over HDMI |
-| Power | 5V to the Pi; the display has its own 5V feed |
+| (2) DC-DC 12V/24V to 5V 5A 25W Buck Converter to Type-C Output Power Adapter | 5V to the Pi; the display has its own 5V feed |
+| USB-C Extender | Helps with cable management |
 
 > This build uses a **USB** GPS receiver read through gpsd. There is **no UART
 > wiring** and no serial-console setup required.
