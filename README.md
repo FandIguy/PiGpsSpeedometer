@@ -24,7 +24,7 @@ run headless in a car — it boots straight to the gauge display with no desktop
 - 12-hour clock (US Central, DST-aware via zoneinfo)
 - GPS signal-strength bars
 - Boots directly to the cluster on power-up (systemd)
-- Simulation mode when no GPS is connected (no code changes needed)
+- Simulation mode for bench testing (`--sim`), and a clear NO GPSD / GPS SIGNAL LOST display instead of fake data in the car
 - Optional Ctrl+M (Minetest) and Ctrl+T (terminal) launch hotkeys
 
 ---
@@ -257,9 +257,18 @@ sudo systemctl restart speedometer
 
 ## Simulation Mode
 
-If no GPS receiver is connected (or gpsd has no fix), the app runs in simulation
-mode automatically — useful for bench testing the UI. Use `UP` / `DOWN` to drive
-the simulated speed. No code changes are required.
+For bench testing the UI without a GPS receiver, start the app in simulation mode:
+
+```bash
+python3 speedometer.py --sim      # or: SPEEDO_SIM=1 python3 speedometer.py
+```
+
+Use `UP` / `DOWN` to drive the simulated speed. The screen shows **SIM MODE**, and
+0–60 runs are timed but not saved to the leaderboard.
+
+Simulation never starts on its own. Without `--sim`, if gpsd is unreachable the
+cluster shows **NO GPSD** and **GPS SIGNAL LOST**. If the receiver stops reporting
+for more than 3 seconds, it shows no fix instead of freezing on the last speed.
 
 ---
 
@@ -314,9 +323,9 @@ sudo reboot
 ```
 
 **Speed stuck at zero.** Confirm gpsd is receiving data with `gpspipe -w -n 10`
-and check that the `TPV` sentences contain a non-zero `speed` field. The app
-falls back to simulation mode automatically if gpsd is unreachable — arrow keys
-will move the simulated speed if that is happening.
+and check that the `TPV` sentences contain a non-zero `speed` field. If the top
+bar shows **NO GPSD**, the app can't reach gpsd (`systemctl status gpsd`). If it
+shows **NO SIGNAL**, gpsd is up but has no fix or the receiver stopped reporting.
 
 ---
 

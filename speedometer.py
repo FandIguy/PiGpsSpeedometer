@@ -4,8 +4,9 @@ STEALTH R/T GPS CLUSTER
 Amber VFD-style GPS speedometer for Raspberry Pi 5 + 7" 1024x600 display
 GPS receiver: GlobalSat BU-353N5 via gpsd
 
-Runs in SIMULATION mode automatically if gpsd-py3 isn't installed or no
-GPS is connected, so you can test the UI before the hardware arrives.
+Simulation mode (fake GPS data, for testing the UI without hardware) only
+runs when asked for:  python3 speedometer.py --sim   or   SPEEDO_SIM=1
+Without it, a missing gpsd shows NO GPSD instead of fake data.
 
 Controls:  ESC = quit  |  UP/DOWN = sim speed  |  R = reset leaderboard
 """
@@ -45,11 +46,15 @@ WIDTH, HEIGHT = 1024, 600
 FPS = 30
 MAX_SPEED = 120
 FULLSCREEN = True
+GPS_STALE_SEC = 3.0   # no TPV from gpsd for this long -> treat as no fix
 
 # --- 0-60 timer / leaderboard ---
 ZERO_TO_SIXTY_TARGET = 60.0
 LAUNCH_THRESHOLD = 2.0
 STOP_THRESHOLD = 1.0
+MIN_STOP_SEC = 1.0       # must sit stopped with a GPS fix this long to arm a run
+MIN_RUN_SEC = 2.0        # anything quicker is a GPS glitch, not a launch
+MAX_ACCEL_MPHPS = 30.0   # ~1.4 g; a bigger jump between GPS fixes aborts the run
 LEADERBOARD_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                                 "zero_to_sixty_times.json")
 LEADERBOARD_SIZE = 5
@@ -85,6 +90,7 @@ class GpsdClient:
         self._lock = threading.Lock()
         self._tpv = {}
         self._sky = {}
+        self._tpv_t = None    # monotonic time the last TPV arrived
         self._connected = False
         t = threading.Thread(target=self._run, args=(host, port), daemon=True)
         t.start()
@@ -129,6 +135,7 @@ class GpsdClient:
         with self._lock:
             if cls == "TPV":
                 self._tpv = msg
+                self._tpv_t = time.monotonic()
             elif cls == "SKY":
                 self._sky = msg
 
@@ -138,24 +145,47 @@ class GpsdClient:
             return self._connected
 
     def snapshot(self):
+        """Return (tpv, sky, tpv_age_sec); age is inf if no TPV yet."""
         with self._lock:
-            return dict(self._tpv), dict(self._sky)
+            age = (time.monotonic() - self._tpv_t) if self._tpv_t is not None else math.inf
+            return dict(self._tpv), dict(self._sky), age
 
 
 class GPSSource:
-    """Wraps gpsd via a background socket thread, falling back to a simulator."""
-    def __init__(self):
+    """Reads gpsd via a background socket thread, or a simulator if sim=True.
+    Never falls back to the simulator on its own: fake data in the car would
+    look real (fake position, speed limit and city)."""
+    def __init__(self, sim=False):
         self.sim_t = 0.0
         self.sim_heading = 315.0
-        self.live = False
+        self.live = not sim         # real GPS mode (False = simulator)
+        self.gpsd_ok = False        # connected to gpsd right now
         self._log_count = 0
-        self._client = GpsdClient()
-        print("[gps] attempting live gpsd connection …")
+        self._stale = True
+        self._client = None
+        if sim:
+            print("[gps] SIMULATION mode (--sim / SPEEDO_SIM=1)")
+        else:
+            self._client = GpsdClient()
+            print("[gps] attempting live gpsd connection …")
 
     def read(self, sim_speed, dt):
-        if self._client.connected:
-            tpv, sky = self._client.snapshot()
-            self.live = True
+        if self.live:
+            tpv, sky, age = self._client.snapshot()
+            self.gpsd_ok = self._client.connected
+            # gpsd down, or the socket is open but the receiver stopped
+            # reporting (unplugged, hung): never show the last TPV as current.
+            stale = not self.gpsd_ok or age > GPS_STALE_SEC
+            if stale != self._stale:
+                print(("[gps] gpsd not connected" if not self.gpsd_ok else
+                       "[gps] no TPV for >%.0fs" % GPS_STALE_SEC) +
+                      " — treating as no fix" if stale else "[gps] receiving TPV data")
+                self._stale = stale
+            if stale:
+                # Keep last position/heading for display, drop speed and fix
+                tpv = {k: tpv[k] for k in ("lat", "lon", "track", "alt", "altMSL")
+                       if k in tpv}
+                sky = {}
             spd_ms  = float(tpv.get("speed") or 0.0)
             spd_mph = spd_ms * 2.23694
             if self._log_count < 10 or self._log_count % 150 == 0:
@@ -178,10 +208,7 @@ class GPSSource:
                 "hdop":    float(sky.get("hdop") or 1.5) if sky else 1.5,
                 "mode":    int(tpv.get("mode") or 1),
             }
-        # --- simulation fallback ---
-        if self.live:
-            print("[gps] gpsd disconnected — falling back to simulation")
-        self.live = False
+        # --- simulation (only with --sim / SPEEDO_SIM=1) ---
         self.sim_t += dt
         self.sim_heading = (self.sim_heading
                             + (random.random() - 0.48) * 0.5 * (sim_speed / 20 + 0.3)) % 360
@@ -208,7 +235,10 @@ def load_leaderboard():
         with open(LEADERBOARD_FILE, "r") as f:
             data = json.load(f)
         times = data.get("times", []) if isinstance(data, dict) else data
-        clean = [e for e in times if isinstance(e, dict) and "seconds" in e]
+        # Drop malformed entries and impossible times recorded by older versions
+        clean = [e for e in times if isinstance(e, dict)
+                 and isinstance(e.get("seconds"), (int, float))
+                 and e["seconds"] >= MIN_RUN_SEC]
         clean.sort(key=lambda e: e["seconds"])
         return clean[:LEADERBOARD_SIZE]
     except (FileNotFoundError, json.JSONDecodeError, OSError, ValueError):
@@ -245,17 +275,62 @@ class ZeroToSixty:
         self.leaderboard = load_leaderboard()
         self.session_best = self.leaderboard[0]["seconds"] if self.leaderboard else None
         self.new_record_at = None
+        self.stopped_since = None   # when speed last dropped to a stop (with fix)
+        self.armed = False          # stopped >= MIN_STOP_SEC; next launch is timed
+        self._raw_prev = None       # last raw GPS speed, for the jump check
+        self._raw_prev_t = None
 
-    def update(self, speed_mph, now):
+    def _abort(self, why):
+        print(f"[0-60] run discarded: {why}")
+        self.state = "READY"
+        self.run_start = None
+        self.elapsed = 0.0
+        self.armed = False
+
+    def update(self, speed_mph, raw_mph, now, fix_ok, live):
+        """speed_mph: smoothed speed (used for timing); raw_mph: unsmoothed GPS
+        speed; fix_ok: current data has a 2D/3D fix; live: real GPS rather than
+        the simulator (simulated runs are timed but never saved)."""
+        if not fix_ok:
+            if self.state == "RUNNING":
+                self._abort("lost GPS fix")
+            self.armed = False
+            self.stopped_since = None
+            self._raw_prev = None
+            return
+
+        # Raw speed only changes when a new fix arrives, so this rate is per fix.
+        jump_rate = None
+        if raw_mph != self._raw_prev:
+            if self._raw_prev is not None and live:
+                rate = abs(raw_mph - self._raw_prev) / max(now - self._raw_prev_t, 1e-3)
+                if rate > MAX_ACCEL_MPHPS:
+                    jump_rate = rate
+            self._raw_prev, self._raw_prev_t = raw_mph, now
+
         if self.state == "READY":
-            if speed_mph >= LAUNCH_THRESHOLD:
-                self.state = "RUNNING"
-                self.run_start = now
-                self.elapsed = 0.0
+            if speed_mph <= STOP_THRESHOLD:
+                if self.stopped_since is None:
+                    self.stopped_since = now
+                elif now - self.stopped_since >= MIN_STOP_SEC:
+                    self.armed = True
+            else:
+                self.stopped_since = None
+                if speed_mph >= LAUNCH_THRESHOLD:
+                    if self.armed and jump_rate is None:
+                        self.state = "RUNNING"
+                        self.run_start = now
+                        self.elapsed = 0.0
+                    self.armed = False
         elif self.state == "RUNNING":
             self.elapsed = now - self.run_start
-            if speed_mph >= ZERO_TO_SIXTY_TARGET:
-                self._finish(now)
+            if jump_rate is not None:
+                self._abort(f"GPS speed jumped {jump_rate:.0f} mph/s")
+            elif speed_mph >= ZERO_TO_SIXTY_TARGET:
+                if self.elapsed < MIN_RUN_SEC:
+                    self._abort(f"{self.elapsed:.2f}s is under the {MIN_RUN_SEC}s minimum")
+                else:
+                    self._finish(now, save=live)
             elif speed_mph <= STOP_THRESHOLD:
                 self.state = "READY"
                 self.run_start = None
@@ -264,10 +339,13 @@ class ZeroToSixty:
             if speed_mph <= STOP_THRESHOLD:
                 self.state = "READY"
 
-    def _finish(self, now):
+    def _finish(self, now, save=True):
         t = self.elapsed
         self.last_time = t
         self.state = "DONE"
+        print(f"[0-60] {t:.2f}s" + ("" if save else " (simulated, not saved)"))
+        if not save:
+            return
         entry = {
             "seconds": round(t, 2),
             "utc": datetime.now(timezone.utc).isoformat(timespec="seconds"),
@@ -765,7 +843,7 @@ def main():
         pygame.quit()
         return
 
-    gps = GPSSource()
+    gps = GPSSource(sim=("--sim" in sys.argv[1:] or os.environ.get("SPEEDO_SIM") == "1"))
 
     zts = ZeroToSixty()
     reset_armed_until = None
@@ -843,7 +921,7 @@ def main():
         if disp_speed > 0.5:
             trip_miles += (disp_speed / 3600.0) * dt
 
-        zts.update(disp_speed, now)
+        zts.update(disp_speed, raw, now, data["mode"] >= 2, gps.live)
         if zts.new_record_at and (now - zts.new_record_at) > NEW_RECORD_FLASH_SEC:
             zts.new_record_at = None
         if reset_armed_until and now > reset_armed_until:
@@ -910,6 +988,8 @@ def main():
         lbl_x = bars_x + 48   # 44px bars + 4px gap
         if not gps.live:
             text(screen, fonts["micro"], "SIM MODE", lbl_x, 28, LABEL, anchor="midleft")
+        elif not gps.gpsd_ok:
+            text(screen, fonts["micro"], "NO GPSD", lbl_x, 28, RED, anchor="midleft")
         elif lost:
             text(screen, fonts["micro"], "NO SIGNAL", lbl_x, 28, RED, anchor="midleft")
         else:
