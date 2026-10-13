@@ -6,8 +6,12 @@
 # Allows the stealth user to switch virtual terminals and open VTs
 # without a password prompt — required by the Minetest and terminal
 # launch scripts, which run as the service user with no TTY.
+#
+# openvt is limited to the exact command in scripts/launch_terminal.sh, which
+# runs the shell as USERNAME. An unrestricted openvt rule would give anyone at
+# the keyboard (or any process running as USERNAME) a passwordless root shell.
 
 USERNAME ALL=(ALL) NOPASSWD: /usr/bin/systemctl stop speedometer
 USERNAME ALL=(ALL) NOPASSWD: /usr/bin/systemctl start speedometer
 USERNAME ALL=(ALL) NOPASSWD: /usr/bin/chvt
-USERNAME ALL=(ALL) NOPASSWD: /usr/bin/openvt
+USERNAME ALL=(ALL) NOPASSWD: /usr/bin/openvt -c 2 -s -w -- /usr/sbin/runuser -l USERNAME

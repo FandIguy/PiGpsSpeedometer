@@ -14,7 +14,9 @@ sleep 0.5
 
 # Open a login shell on tty2, switch the screen to it, and wait for exit.
 # User types 'exit' to return to the cluster.
-sudo openvt -c 2 -s -w -- /bin/bash --login
+# openvt needs root, but the shell itself runs as USERNAME (runuser), so this
+# is not a root shell. Must match /etc/sudoers.d/speedometer exactly.
+sudo openvt -c 2 -s -w -- /usr/sbin/runuser -l USERNAME
 
 # Shell exited -- switch the screen back to tty1
 sudo chvt 1
